@@ -55,13 +55,12 @@ class Functor:
             mask_account = local[:3] + '*' * 3 + local[-3:]
             return f"{mask_account}@{domain}"
 
-        mask_account = account[:3] + '*' * 3 + account[-3:]
+        mask_account = account[:6] + '*' * 7 + account[-6:]
         return mask_account
-            
     
-    def decode_token(self, token: str):
+    def decode_account(self, account: str):
         try:
-            header, payload, signature = token.split(".")
+            header, payload, signature = account.split(".")
             decoded_payload = base64.urlsafe_b64decode(payload + "==").decode("utf-8")
             parsed_payload = json.loads(decoded_payload)
 
@@ -69,9 +68,39 @@ class Functor:
             user_id = parsed_payload['sub']
             exp_time = parsed_payload['exp']
 
-            return self.mask_account(username), user_id, exp_time
+            return username, user_id, exp_time
         except Exception as e:
             return None, None, None
+        
+    def print_info(self, account):
+        separator = "=" * 25
+        self.log(
+            f"{Fore.CYAN + Style.BRIGHT}{separator}[{Style.RESET_ALL}"
+            f"{Fore.WHITE + Style.BRIGHT} {self.mask_account(account)} {Style.RESET_ALL}"
+            f"{Fore.CYAN + Style.BRIGHT}]{separator}{Style.RESET_ALL}"
+        )
+        
+    async def user_login(self, email: str, password: str, retries=5):
+        url = 'https://node.securitylabs.xyz/api/v1/auth/signin-user'
+        data = json.dumps({'email':email, 'password':password})
+        headers = {
+            **self.headers,
+            'Content-Length': str(len(data)),
+            'Content-Type': 'application/json',
+        }
+        for attempt in range(retries):
+            try:
+                async with ClientSession(timeout=ClientTimeout(total=30)) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
+                        response.raise_for_status()
+                        result = await response.json()
+                        return result['accessToken']
+            except (Exception, ClientResponseError) as e:
+                if attempt < retries - 1:
+                    await asyncio.sleep(5)
+                    continue
+
+                return None
 
     async def user_data(self, token: str, retries=5):
         url = 'https://node.securitylabs.xyz/api/v1/users'
@@ -117,14 +146,14 @@ class Functor:
         exp_time_wib = datetime.fromtimestamp(exp_time, pytz.utc).astimezone(wib).strftime('%x %X %Z')
         if int(time.time()) > exp_time:
             self.log(
-                f"{Fore.CYAN + Style.BRIGHT}Status  :{Style.RESET_ALL}"
-                f"{Fore.RED + Style.BRIGHT} Token Expired {Style.RESET_ALL}"
+                f"{Fore.CYAN + Style.BRIGHT}Token   :{Style.RESET_ALL}"
+                f"{Fore.RED + Style.BRIGHT} Expired {Style.RESET_ALL}"
             )
             return
 
         self.log(
-            f"{Fore.CYAN + Style.BRIGHT}Status  :{Style.RESET_ALL}"
-            f"{Fore.GREEN + Style.BRIGHT} Token Active {Style.RESET_ALL}"
+            f"{Fore.CYAN + Style.BRIGHT}Token   :{Style.RESET_ALL}"
+            f"{Fore.GREEN + Style.BRIGHT} Active {Style.RESET_ALL}"
             f"{Fore.MAGENTA + Style.BRIGHT}-{Style.RESET_ALL}"
             f"{Fore.CYAN + Style.BRIGHT} Expired at {Style.RESET_ALL}"
             f"{Fore.WHITE + Style.BRIGHT}{exp_time_wib}{Style.RESET_ALL}"
@@ -189,31 +218,39 @@ class Functor:
 
     async def main(self):
         try:
-            with open('tokens.txt', 'r') as file:
-                tokens = [line.strip() for line in file if line.strip()]
+            with open('accounts.txt', 'r') as file:
+                accounts = [line.strip() for line in file if line.strip()]
 
             while True:
                 self.clear_terminal()
                 self.welcome()
                 self.log(
                     f"{Fore.GREEN + Style.BRIGHT}Account's Total: {Style.RESET_ALL}"
-                    f"{Fore.WHITE + Style.BRIGHT}{len(tokens)}{Style.RESET_ALL}"
+                    f"{Fore.WHITE + Style.BRIGHT}{len(accounts)}{Style.RESET_ALL}"
                 )
-                
-                separator = "=" * 25
-                for token in tokens:
-                    if token:
-                        username, user_id, exp_time = self.decode_token(token)
+            
+                for account in accounts:
+                    if account:
+
+                        if "@" in account:
+                            email, password = account.split(":")
+                            if email and password:
+                                account = await self.user_login(email, password)
+                                if not account:
+                                    self.print_info(email)
+                                    self.log(
+                                        f"{Fore.CYAN + Style.BRIGHT}Status  :{Style.RESET_ALL}"
+                                        f"{Fore.RED + Style.BRIGHT} Login Failed {Style.RESET_ALL}"
+                                    )
+                                    continue
+
+                        username, user_id, exp_time = self.decode_account(account)
                         if username and user_id and exp_time:
-                            self.log(
-                                f"{Fore.CYAN + Style.BRIGHT}{separator}[{Style.RESET_ALL}"
-                                f"{Fore.WHITE + Style.BRIGHT} {username} {Style.RESET_ALL}"
-                                f"{Fore.CYAN + Style.BRIGHT}]{separator}{Style.RESET_ALL}"
-                            )
-                            await self.process_accounts(token, user_id, exp_time)
+                            self.print_info(username)
+                            await self.process_accounts(account, user_id, exp_time)
                             await asyncio.sleep(3)
 
-                self.log(f"{Fore.CYAN + Style.BRIGHT}={Style.RESET_ALL}" * 75)
+                self.log(f"{Fore.CYAN + Style.BRIGHT}={Style.RESET_ALL}" * 73)
                 seconds = 12 * 60 * 60
                 while seconds > 0:
                     formatted_time = self.format_seconds(seconds)
@@ -227,7 +264,7 @@ class Functor:
                     seconds -= 1
 
         except FileNotFoundError:
-            self.log(f"{Fore.RED}File 'tokens.txt' tidak ditemukan.{Style.RESET_ALL}")
+            self.log(f"{Fore.RED}File 'accounts.txt' tidak ditemukan.{Style.RESET_ALL}")
             return
         except Exception as e:
             self.log(f"{Fore.RED+Style.BRIGHT}Error: {e}{Style.RESET_ALL}")

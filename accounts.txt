@@ -1,0 +1,4 @@
+eyjxxxxx  - If Use Token
+email@domain.com:password - If Use Email and Password
+
+U can put them together
