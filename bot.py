@@ -66,18 +66,33 @@ class Functor:
 
             username = parsed_payload['email']
             user_id = parsed_payload['sub']
-            exp_time = parsed_payload['exp']
+            exp_time_utc = parsed_payload['exp']
 
-            return username, user_id, exp_time
+            return username, user_id, exp_time_utc
         except Exception as e:
             return None, None, None
         
-    def print_info(self, account):
+    def print_account_username(self, account: str):
         separator = "=" * 25
         self.log(
             f"{Fore.CYAN + Style.BRIGHT}{separator}[{Style.RESET_ALL}"
             f"{Fore.WHITE + Style.BRIGHT} {self.mask_account(account)} {Style.RESET_ALL}"
             f"{Fore.CYAN + Style.BRIGHT}]{separator}{Style.RESET_ALL}"
+        )
+
+    def print_token_status(self, utc_time_now: int, exp_time_utc: int, exp_time_wib: str):
+        if utc_time_now > exp_time_utc:
+            return self.log(
+                f"{Fore.CYAN + Style.BRIGHT}Token   :{Style.RESET_ALL}"
+                f"{Fore.RED + Style.BRIGHT} Expired {Style.RESET_ALL}"
+            )
+
+        return self.log(
+            f"{Fore.CYAN + Style.BRIGHT}Token   :{Style.RESET_ALL}"
+            f"{Fore.GREEN + Style.BRIGHT} Active {Style.RESET_ALL}"
+            f"{Fore.MAGENTA + Style.BRIGHT}-{Style.RESET_ALL}"
+            f"{Fore.CYAN + Style.BRIGHT} Expired at {Style.RESET_ALL}"
+            f"{Fore.WHITE + Style.BRIGHT}{exp_time_wib}{Style.RESET_ALL}"
         )
         
     async def user_login(self, email: str, password: str, retries=5):
@@ -141,24 +156,24 @@ class Functor:
                     continue
                 
                 return None
-        
-    async def process_accounts(self, token: str, user_id: str, exp_time: int):
-        exp_time_wib = datetime.fromtimestamp(exp_time, pytz.utc).astimezone(wib).strftime('%x %X %Z')
-        if int(time.time()) > exp_time:
+            
+    async def get_access_token(self, email: str, password: str):
+        token = await self.user_login(email, password)
+        if token:
             self.log(
-                f"{Fore.CYAN + Style.BRIGHT}Token   :{Style.RESET_ALL}"
-                f"{Fore.RED + Style.BRIGHT} Expired {Style.RESET_ALL}"
+                f"{Fore.CYAN + Style.BRIGHT}Status  :{Style.RESET_ALL}"
+                f"{Fore.GREEN + Style.BRIGHT} Login Success {Style.RESET_ALL}"
             )
-            return
-
+            return token
+        
+        self.print_account_username(email)
         self.log(
-            f"{Fore.CYAN + Style.BRIGHT}Token   :{Style.RESET_ALL}"
-            f"{Fore.GREEN + Style.BRIGHT} Active {Style.RESET_ALL}"
-            f"{Fore.MAGENTA + Style.BRIGHT}-{Style.RESET_ALL}"
-            f"{Fore.CYAN + Style.BRIGHT} Expired at {Style.RESET_ALL}"
-            f"{Fore.WHITE + Style.BRIGHT}{exp_time_wib}{Style.RESET_ALL}"
+            f"{Fore.CYAN + Style.BRIGHT}Status  :{Style.RESET_ALL}"
+            f"{Fore.RED + Style.BRIGHT} Login Failed {Style.RESET_ALL}"
         )
-
+        return None
+        
+    async def process_accounts(self, token: str, user_id: str):
         balance = "N/A"
         last_checkin = None
 
@@ -232,23 +247,35 @@ class Functor:
                 for account in accounts:
                     if account:
 
-                        if "@" in account:
-                            email, password = account.split(":")
-                            if email and password:
-                                account = await self.user_login(email, password)
-                                if not account:
-                                    self.print_info(email)
-                                    self.log(
-                                        f"{Fore.CYAN + Style.BRIGHT}Status  :{Style.RESET_ALL}"
-                                        f"{Fore.RED + Style.BRIGHT} Login Failed {Style.RESET_ALL}"
-                                    )
+                        if not "@" in account:
+                            utc_time_now = int(time.time())
+                            username, user_id, exp_time_utc = self.decode_account(account)
+
+                            if username and user_id and exp_time_utc:
+                                exp_time_wib = datetime.fromtimestamp(exp_time_utc, pytz.utc).astimezone(wib).strftime('%x %X %Z')
+
+                                self.print_account_username(username)
+                                self.print_token_status(utc_time_now, exp_time_utc, exp_time_wib)
+
+                                if utc_time_now > exp_time_utc:
                                     continue
 
-                        username, user_id, exp_time = self.decode_account(account)
-                        if username and user_id and exp_time:
-                            self.print_info(username)
-                            await self.process_accounts(account, user_id, exp_time)
-                            await asyncio.sleep(3)
+                                await self.process_accounts(account, user_id)
+                                await asyncio.sleep(3)
+                                continue
+
+                        email, password = account.split(":")
+                        if email and password:
+                            self.print_account_username(email)
+
+                            token = await self.get_access_token(email, password)
+                            if not token:
+                                continue
+
+                            username, user_id, exp_time_utc = self.decode_account(token)
+                            if user_id:
+                                await self.process_accounts(token, user_id)
+                                await asyncio.sleep(3)
 
                 self.log(f"{Fore.CYAN + Style.BRIGHT}={Style.RESET_ALL}" * 73)
                 seconds = 12 * 60 * 60
@@ -257,7 +284,9 @@ class Functor:
                     print(
                         f"{Fore.CYAN+Style.BRIGHT}[ Wait for{Style.RESET_ALL}"
                         f"{Fore.WHITE+Style.BRIGHT} {formatted_time} {Style.RESET_ALL}"
-                        f"{Fore.CYAN+Style.BRIGHT}... ]{Style.RESET_ALL}",
+                        f"{Fore.CYAN+Style.BRIGHT}... ]{Style.RESET_ALL}"
+                        f"{Fore.WHITE+Style.BRIGHT} | {Style.RESET_ALL}"
+                        f"{Fore.BLUE+Style.BRIGHT}All Accounts Have Been Processed...{Style.RESET_ALL}",
                         end="\r"
                     )
                     await asyncio.sleep(1)
