@@ -1,8 +1,8 @@
 # Functor Node BOT
 Functor Node BOT
 
-Register Here : [Functor Node](https://node.securitylabs.xyz/?from=extension&type=signin&referralCode=cm4m90eqs763ro81bdrwsehwd)
-Enter Code    : cm4m90eqs763ro81bdrwsehwd
+- Register Here: [Functor Node](https://node.securitylabs.xyz/?from=extension&type=signin&referralCode=cm4m90eqs763ro81bdrwsehwd)
+- Use Code: cm4m90eqs763ro81bdrwsehwd
 
 ## Features
 
