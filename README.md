@@ -38,7 +38,7 @@ Functor Node BOT
    ```
 
   ```bash
-    eyjxxxxx  -  Use Token - prss f12-application-local storage-access token
+    eyjxxxxx  -  Use Token - prss f12,application,local storage,access token
     email@domain.com:password -  Use Email and Password
 
   use them together
