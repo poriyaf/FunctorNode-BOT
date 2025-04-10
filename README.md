@@ -26,12 +26,16 @@ Functor Node BOT
 
 2. **Install Requirements:**
    ```bash
-pip install --break-system-packages -r requirements.txt
+   pip install --break-system-packages -r requirements.txt
    ```
 
 ## Configuration
 
-- **accounts.txt:** You will find the file `accounts.txt` inside the project directory. Make sure `accounts.txt` contains data that matches the format expected by the script. Here are examples of file formats:
+- **accounts.txt:** You will find the file `accounts.txt` inside the project directory. Make sure `accounts.txt` contains 
+ data that matches the format expected by the script. Here are examples of file formats:
+   ```bash
+   nano accounts.txt
+   ```
 
   ```bash
     eyjxxxxx  -  Use Token - prss f12-application-local storage-access token
